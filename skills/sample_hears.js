@@ -8,7 +8,6 @@ In these examples, Botkit is configured to listen for certain phrases, and then
 respond immediately with a single line response.
 
 */
-
 var wordfilter = require('wordfilter');
 
 module.exports = function(controller) {
@@ -28,7 +27,7 @@ module.exports = function(controller) {
     });
 
 
-    controller.hears(['^uptime','^debug'], 'direct_message,direct_mention', function(bot, message) {
+    controller.hears(['^uptime', '^debug'], 'direct_message,direct_mention', function(bot, message) {
 
         bot.createConversation(message, function(err, convo) {
             if (!err) {
@@ -43,7 +42,7 @@ module.exports = function(controller) {
 
     });
 
-    controller.hears(['^say (.*)','^say'], 'direct_message,direct_mention', function(bot, message) {
+    controller.hears(['^say (.*)', '^say'], 'direct_message,direct_mention', function(bot, message) {
         if (message.match[1]) {
 
             if (!wordfilter.blacklisted(message.match[1])) {
@@ -56,15 +55,94 @@ module.exports = function(controller) {
         }
     });
 
-    controller.hears(['^(.*) thanks'], 'direct_message,direct_mention', function(bot, message) {
-          if (message.match[1]) {
+    controller.hears(['thanks'], 'direct_message,direct_mention', function(bot, message) {
+        if (message.match[1]) {
             bot.reply(message);
+        } else {
+            bot.reply(message, 'I will repeat whatever you say.')
+        }
+    });
+
+    controller.hears('clear data', 'direct_message', function(bot, message) {
+        controller.storage.teams.all(function(err, all_team_data) {
+            all_team_data.map(function(row) {
+                //controller.storage.teams.delete(row.id, function(err) {
+                //console.log(err)
+                //});
+            });
+        });
+    });
+
+    controller.hears('start counting', 'direct_message,direct_mention,mention', function(bot, message) {
+        controller.storage.teams.save({
+            id: 'kudos',
+            users: {}
+        }, function(err) {
+            console.log(err)
+        });
+    });
+    controller.hears(['leader','scores','leaderboard','board'], 'direct_message,direct_mention', function(bot, message) {
+        controller.storage.teams.get('kudos', function(err, kudos_data) {
+          console.log(kudos_data);
+            var attachments = [];
+  var attachment = {
+    title: 'Leaderboard',
+    color: '#FFCC99',
+    fields: ['Who','Points'],
+  };
+for(var user in kudos_data.users){
+  attachment.fields.push({
+    label: 'Field',
+    value: user,
+    short: true,
+  });
+
+  attachment.fields.push({
+    label: 'Field',
+    value: kudos_data.users[user],
+    short: true,
+  });
+}
+  attachments.push(attachment);
+
+  bot.reply(message,{
+    text: 'See below...',
+    attachments: attachments,
+  },function(err,resp) {
+    console.log(err,resp);
+  });
+        });
+    });
+
+    controller.hears(['(.*)(\\+\\+)'], 'direct_message,direct_mention', function(bot, message) {
+        var who = message.match[1].trim();
+        console.log(who + ' scores!');
+        //console.log(message);
+        //bot.reply(message, who + ' scores!');
+        controller.storage.teams.get('kudos', function(err, kudos) {
+          
+          if(typeof kudos.users[who] !== 'undefined'){
+            kudos.users[who]++;
           } else {
-              bot.reply(message, 'I will repeat whatever you say.')
+            kudos.users[who] = 1;
           }
-      });
-  
-  
+          controller.storage.teams.save(kudos, function(err, saved) {
+
+                if (err) {
+                    bot.reply(message, 'I experienced an error adding point: ' + err);
+                } else {
+                    bot.api.reactions.add({
+                        name: 'thumbsup',
+                        channel: message.channel,
+                        timestamp: message.ts
+                    });
+                }
+
+            });
+        });
+    });
+
+
     /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
     /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
     /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
